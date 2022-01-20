@@ -1,0 +1,115 @@
+# This is a basic workflow to help you get started with Actions
+
+name: packer-windows-11-avd
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    # run on main branch
+    branches:
+      - master
+    paths:
+      - 'packer/**'
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build_image:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # https://dev.to/mihinduranasinghe/using-docker-containers-in-jobs-github-actions-3eof
+    container:
+      # https://github.com/cytopia/docker-ansible
+      image: cytopia/ansible:latest-tools
+
+    env:
+      # ${{ env.PKR_VAR_azure_managed_image_name }}
+      PKR_VAR_azure_managed_image_name: windows-11-avd
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: install packer
+        env:
+          PACKER_VERSION: 1.7.8
+        run: |
+          apk --no-cache add curl unzip sshpass
+          curl -O https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip
+          unzip packer_${PACKER_VERSION}_linux_amd64.zip -d /usr/bin
+          rm -f packer_${PACKER_VERSION}_linux_amd64.zip
+          chmod +x /usr/bin/packer
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: '0'
+
+      - name: show versions in container
+        run: |
+          ansible --version
+          packer version
+          ls -la
+
+      - name: packer init
+        id: init
+        run: |
+          cd packer/${{ env.PKR_VAR_azure_managed_image_name }}
+          packer init windows.pkr.hcl
+
+      - name: packer validate
+        id: validate
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          cd packer/${{ env.PKR_VAR_azure_managed_image_name }}
+          packer validate -var-file ../../shared_vars.hcl -var-file ./image.pkrvars.hcl -var="azure_managed_image_name=${{ env.PKR_VAR_azure_managed_image_name }}" -var="azure_shared_image_gallery_destination_image_version=1.0.0" windows.pkr.hcl
+
+      # - name: bump version and push tag
+      #   id: versionbump
+      #   if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      #   uses: anothrNick/github-tag-action@1.36.0
+      #   # https://github.com/marketplace/actions/github-tag-bump
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     DEFAULT_BUMP: patch
+      #     WITH_V: false
+      #     VERBOSE: true
+      #
+      # - name: echo new version
+      #   if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      #   run: echo ${{ steps.versionbump.outputs.new_tag }}
+
+      - name:  'automated version bump'
+        id: versionbump
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        uses:  remorses/bump-version@js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version_file: ./VERSION
+
+      - name: echo new version
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        run: echo ${{ steps.versionbump.outputs.version }}
+
+      - name: packer build
+        id: build
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          cd packer/${{ env.PKR_VAR_azure_managed_image_name }}
+          packer build -force -var-file ../../shared_vars.hcl -var-file ./image.pkrvars.hcl -var="azure_managed_image_name=${{ env.PKR_VAR_azure_managed_image_name }}" -var="azure_shared_image_gallery_destination_image_version=${{ steps.versionbump.outputs.version }}" windows.pkr.hcl

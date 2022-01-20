@@ -1,0 +1,91 @@
+---
+- hosts: windows
+  become: true
+  gather_facts: yes
+
+  vars:
+    # chocolatey_packages:
+    #   - 7zip.install
+    #   - firefox
+    #   - fslogix
+    language_experience_pack_download_dir: 'D:\temp'
+    language_experience_packs: ["de-de"]
+    office365_configuration_xml: files/office/configuration.xml
+    teams_is_wvd_environment: true
+    teams_per_machine_install: true
+    teams_is_32bit: true
+
+  roles:
+    # Adding some ansible-role just for fun
+    - { name: ansible-role-win10-languagepack }
+    - { name: ansible-role-win-fslogix }
+    - { name: ansible-role-win-office365 }
+    - { name: ansible-role-win-teams }
+    - { name: ansible-role-win-onedrive }
+
+  pre_tasks:
+
+      # This task is not necessary but a nice optimization
+    - name: Optimize powershell
+      win_shell: |
+        [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
+        iex ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/andif888/optimize-powershell-assemblies/master/optimize-powershell-assemblies.ps1'))
+
+    - name: Install Chocolatey
+      win_shell: |
+        [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        $env:Path += ";" + $env:AllUsersProfile + "\chocolatey\bin"
+
+  tasks:
+      # This task is not necessary because ansible connects using SSH, but it's quite nice to have WINRM working
+    - name: Configure remote for ansible
+      win_shell: |
+        [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
+        iex ((New-Object System.Net.Webclient).DownloadString('https://github.com/ansible/ansible/raw/devel/examples/scripts/ConfigureRemotingForAnsible.ps1'))
+
+    - name: Remove Appx Packages
+      win_shell: |
+        Get-AppXPackage | Where {($_.NonRemovable -eq $false) -and ($_.IsFramework -eq $false)} | Remove-AppXPackage -ErrorAction SilentlyContinue
+      ignore_errors: yes
+
+      # This task is not necessary but shows how to integrate ansible-roles
+    # - name: Include role ansible-role-win-restic
+    #   include_role:
+    #     name: ansible-role-win-restic
+    #   vars:
+    #     restic_version: '0.12.1'
+
+      # This task is not necessary but installs some software
+    # - name: Install packages with chocolatey
+    #   win_chocolatey:
+    #     name: '{{ item }}'
+    #     state: present
+    #   loop: '{{ chocolatey_packages }}'
+
+    # - name: Include role ansible-role-win-regedit
+    #   include_role:
+    #     name: ansible-role-win-regedit
+    #   vars:
+    #     win_registry_items:
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "DeleteLocalProfileWhenVHDShouldApply", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "Enabled", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "FlipFlopProfileDirectoryName", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "IsDynamic", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "SizeInMBs", data: 1024, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "VHDLocations", data: ['\\ppravdsta.file.core.windows.net\fslogix\profilecontainer'], type: multistring, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "VHDXSectorSize", data: 4096, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\FSLogix\\Profiles", name: "VolumeType", data: "vhdx", type: string, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "Enabled", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "FlipFlopProfileDirectoryName", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "IsDynamic", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "IncludeTeams", data: 1, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "SizeInMBs", data: 1024, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "VHDLocations", data: ['\\ppravdsta.file.core.windows.net\fslogix\officecontainer'], type: multistring, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "VHDXSectorSize", data: 4096, type: dword, state: present }
+    #       - { path: "HKLM:\\Software\\Policies\\FSLogix\\ODFC", name: "VolumeType", data: "vhdx", type: string, state: present }
+
+    # - name: Shortcut frxtray
+    #   win_shortcut:
+    #     src: '%ProgramFiles%\FSLogix\Apps\frxtray.exe'
+    #     dest: '%ProgramData%\Microsoft\Windows\Start Menu\Programs\Startup\frxtray.lnk'

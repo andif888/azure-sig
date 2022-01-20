@@ -1,0 +1,213 @@
+name: sig_destroy
+
+on:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  AZURE_CREDENTIALS: '{"clientId":"${{ secrets.ARM_CLIENT_ID }}", "clientSecret":"${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId":"${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId":"${{ secrets.ARM_TENANT_ID }}"}'
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+jobs:
+  windows_11_avd:
+    name: windows-11-avd
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: windows-11-avd
+      tf_actions_working_dir: 'terraform/windows-11-avd'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+      - name: checkout repo
+        uses: actions/checkout@v2
+
+      - name: terraform setup
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init
+        id: init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          shared_vars_file=../../shared_vars.hcl
+          azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          terraform init \
+          -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
+          -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
+          -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
+          -backend-config="key=${azure_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+      - name: terraform plan
+        id: plan
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: terraform plan -var-file ../../shared_vars.hcl -no-color
+
+      - name: az login
+        uses: azure/login@v1
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
+      # - run: echo "${{ steps.plan.outputs.stdout }}"
+      # - run: echo "${{ steps.plan.outputs.stderr }}"
+      # - run: echo "${{ steps.plan.outputs.exitcode }}"
+
+      - name: delete image-versions
+        run: |
+          azure_managed_image_name=$(terraform output azurerm_shared_image_name  | tr -d '"')
+          azure_gallery_name=$(terraform output azurerm_shared_image_gallery_name  | tr -d '"')
+          azure_resource_group=$(terraform output azurerm_resource_group_name  | tr -d '"')
+          for i in `az sig image-version list --gallery-image-definition $azure_managed_image_name --gallery-name $azure_gallery_name --resource-group $azure_resource_group -o tsv --query '[].name'`; do echo "purging image-versions: $i" && $(az sig image-version delete --gallery-image-definition $azure_managed_image_name --gallery-image-version $i --gallery-name $azure_gallery_name --resource-group $azure_resource_group); done
+          az image delete --name $azure_managed_image_name --resource-group $azure_resource_group
+
+      - name: terraform destroy
+        id: destroy
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: terraform destroy -var-file ../../shared_vars.hcl -auto-approve
+
+  en_windows_2022_small:
+    name: en-windows-2022-small
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: en-windows-2022-small
+      tf_actions_working_dir: 'terraform/en-windows-2022-small'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+      - name: checkout repo
+        uses: actions/checkout@v2
+
+      - name: terraform setup
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init
+        id: init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          shared_vars_file=../../shared_vars.hcl
+          azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          terraform init \
+          -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
+          -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
+          -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
+          -backend-config="key=${azure_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+      - name: terraform plan
+        id: plan
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: terraform plan -var-file ../../shared_vars.hcl -no-color
+
+      - name: az login
+        uses: azure/login@v1
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
+      # - run: echo "${{ steps.plan.outputs.stdout }}"
+      # - run: echo "${{ steps.plan.outputs.stderr }}"
+      # - run: echo "${{ steps.plan.outputs.exitcode }}"
+
+      - name: delete image-versions
+        run: |
+          azure_managed_image_name=$(terraform output azurerm_shared_image_name  | tr -d '"')
+          azure_gallery_name=$(terraform output azurerm_shared_image_gallery_name  | tr -d '"')
+          azure_resource_group=$(terraform output azurerm_resource_group_name  | tr -d '"')
+          for i in `az sig image-version list --gallery-image-definition $azure_managed_image_name --gallery-name $azure_gallery_name --resource-group $azure_resource_group -o tsv --query '[].name'`; do echo "purging image-versions: $i" && $(az sig image-version delete --gallery-image-definition $azure_managed_image_name --gallery-image-version $i --gallery-name $azure_gallery_name --resource-group $azure_resource_group); done
+          az image delete --name $azure_managed_image_name --resource-group $azure_resource_group
+
+      - name: terraform destroy
+        id: destroy
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: terraform destroy -var-file ../../shared_vars.hcl -auto-approve
+
+  terraform_image_gallery:
+    name: _image_gallery
+    needs: en_windows_2022_small
+    runs-on: ubuntu-latest
+    env:
+      tf_actions_working_dir: 'terraform/_image_gallery'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+      - name: checkout repo
+        uses: actions/checkout@v2
+
+      - name: terraform setup
+        uses: hashicorp/setup-terraform@v1
+
+      - name: terraform init
+        id: init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          shared_vars_file=../../shared_vars.hcl
+          azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+          terraform init \
+          -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
+          -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
+          -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
+          -backend-config="key=${azure_gallery_name}.tfstate"
+
+      - name: terraform destroy
+        id: destroy
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: terraform destroy -var-file ../../shared_vars.hcl -auto-approve

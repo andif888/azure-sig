@@ -1,0 +1,6 @@
+---
+- src: https://github.com/andif888/ansible-role-win10-languagepack
+- src: https://github.com/andif888/ansible-role-win-office365
+- src: https://github.com/andif888/ansible-role-win-teams
+- src: https://github.com/andif888/ansible-role-win-onedrive
+- src: https://github.com/andif888/ansible-role-win-fslogix

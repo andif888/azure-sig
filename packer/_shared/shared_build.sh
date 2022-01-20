@@ -1,0 +1,92 @@
+#!/bin/bash
+set -e
+
+display_usage() {
+    echo -e "Invalid parameters."
+    echo -e "\nUsage: $0 --image [azure_image_name] --version [azure_image_version] \n"
+    echo -e "Example: $0 --image en-windows-2022-small --version 1.0.1 \n"
+}
+
+current_dir=$(pwd)
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+script_dir_name=$(basename $script_dir)
+proj_root="$(dirname $(dirname $script_dir))"
+
+echo "current_dir:"
+echo $current_dir
+echo "-------"
+echo "script_name:"
+echo $script_name
+echo "-------"
+echo "script_dir:"
+echo $script_dir
+echo "-------"
+echo "script_dir_name:"
+echo $script_dir_name
+echo "-------"
+echo "proj_root:"
+echo $proj_root
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -i|--image)
+    IMAGE="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -v|--version)
+    VERSION="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+shared_vars_file=../../shared_vars.hcl
+azure_managed_image_name=${IMAGE}
+azure_managed_image_version=${VERSION}
+
+
+if [ -z "$azure_managed_image_name" ]
+then
+    #display_usage
+    azure_managed_image_name=$script_dir_name
+    #exit 1
+fi
+if [ -z "$azure_managed_image_version" ]
+then
+    #display_usage
+    azure_managed_image_version=$(cat ../../VERSION | xargs)
+    #exit 1
+fi
+
+#[ ! -f "$azure_managed_image_name.pkrvars.hcl" ] && echo "Error: File $azure_managed_image_name.pkrvars.hcl DOES NOT EXIST" && exit 2
+
+echo -e "-----------------------------------"
+echo -e "Packer Azure Managed Image Build"
+echo -e "Azure Managed Image: $azure_managed_image_name"
+echo -e "Azure Managed Image Version: $azure_managed_image_version"
+echo -e "-----------------------------------"
+
+packer init windows.pkr.hcl
+packer validate \
+-var-file $shared_vars_file \
+-var-file ./image.pkrvars.hcl \
+-var="azure_managed_image_name=$azure_managed_image_name" \
+-var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" windows.pkr.hcl
+
+packer build -force \
+-var-file $shared_vars_file \
+-var-file ./image.pkrvars.hcl \
+-var="azure_managed_image_name=$azure_managed_image_name" \
+-var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" windows.pkr.hcl
