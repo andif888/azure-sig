@@ -15,3 +15,4 @@ azure_vm_size                   = "Standard_D2ds_v4"
 
 # The main ansible playbook which packer executes
 ansible_playbook_file           = "../../ansible/playbook.yml"
+#
