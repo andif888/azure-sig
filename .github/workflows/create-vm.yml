@@ -1,0 +1,110 @@
+
+name: create-vm
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      azure_vm_name:
+        required: true
+        description: 'What should be the name of the VMs'
+        default: 'testvm'
+      azure_vm_size:
+        required: true
+        type: choice
+        description: ' Which VM size?'
+        options:
+          - Standard_D2ds_v5
+          - Standard_D4ds_v5
+          - Standard_D8ds_v5
+          - Standard_B2s
+          - Standard_B2ms
+          - Standard_B4ms
+        default: 'Standard_D4ds_v5'
+      azure_vm_instance_count:
+        required: true
+        description: 'How much VMs should be created?'
+        default: 1
+      azure_vm_should_join_domain:
+        type: boolean
+        description: 'Should we join the VMs to the domain?'
+        default: 'false'
+      azure_vm_shared_image_name:
+        required: true
+        type: choice
+        description: 'Which shared gallery image should be used?'
+        options:
+          - de-windows-10-avd
+          - de-windows-11-avd
+          - de-windows-2019-small
+          - de-windows-2022-small
+          - en-windows-10-avd
+          - en-windows-11-avd
+          - en-windows-2019-small
+          - en-windows-2022-small
+      azure_vm_shared_image_version:
+        required: true
+        description: 'Which version of the shared gallery image should be used?'
+        default: 'latest'
+      azure_vm_os_disk_storage_account_type:
+        required: true
+        type: choice
+        description: 'Which storage account type should be used?'
+        options:
+          - Standard_LRS
+          - Premium_LRS
+        default: 'Standard_LRS'
+      azure_vm_os_disk_ephemeral:
+        required: true
+        type: boolean
+        description: 'Should we use ephemeral OS disk?'
+        default: 'false'
+      azure_vm_license_type:
+        required: true
+        type: choice
+        description: 'Which VM license type?'
+        options:
+          - None
+          - Windows_Server
+          - windows_Client
+        default: 'None'
+
+
+jobs:
+
+  create_vm:
+    name: create_vm
+    runs-on: ubuntu-latest
+    env:
+      tf_actions_working_dir: 'test/vms'
+
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v2
+
+      - name: terraform setup
+        uses: hashicorp/setup-terraform@v1
+
+      - name: terraform init
+        id: init
+        run: terraform init
+
+      - name: terraform apply
+        id: apply
+        run: |
+          echo -n ${{ secrets.envfile }} > .env && . ./.env
+          export TF_VAR_azure_vm_name=${{ github.event.inputs.azure_vm_name }}
+          export TF_VAR_azure_vm_size=${{ github.event.inputs.azure_vm_size }}
+          export TF_VAR_azure_vm_instance_count=${{ github.event.inputs.azure_vm_instance_count }}
+          export TF_VAR_azure_vm_shared_image_name=${{ github.event.inputs.azure_vm_shared_image_name }}
+          export TF_VAR_azure_vm_shared_image_version=${{ github.event.inputs.azure_vm_shared_image_version }}
+          export TF_VAR_azure_vm_os_disk_storage_account_type=${{ github.event.inputs.azure_vm_os_disk_storage_account_type }}
+          export TF_VAR_azure_vm_os_disk_ephemeral=${{ github.event.inputs.azure_vm_os_disk_ephemeral }}
+          [ "$TF_VAR_azure_vm_os_disk_ephemeral" = true ] && export TF_VAR_azure_vm_os_disk_caching="ReadOnly"
+          export azure_vm_should_join_domain=${{ github.event.inputs.azure_vm_should_join_domain }}
+          [ "$azure_vm_should_join_domain" = true ] || (unset TF_VAR_azure_vm_join_domain_name)
+          export TF_VAR_azure_vm_license_type=${{ github.event.inputs.azure_vm_license_type }}
+          terraform apply -auto-approve

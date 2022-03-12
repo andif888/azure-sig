@@ -1,18 +1,3 @@
-terraform {
-  required_version = ">= 0.12"
-}
-
-provider "azurerm" {
-  # Whilst version is optional, we /strongly recommend/ using it to pin the version of the Provider being used
-  # version = "~> 2.19"
-  features {}
-
-  subscription_id = var.azure_subscription_id
-  client_id       = var.azure_client_id
-  client_secret   = var.azure_client_secret
-  tenant_id       = var.azure_tenant_id
-}
-
 module "azure_virtual_desktop_vm" {
   source                              = "./module/vm"
   admin_username                      = var.azure_vm_admin_username

@@ -89,7 +89,7 @@ variable "azure_vm_size" {
 }
 variable "azure_vm_license_type" {
   type    = string
-  default = "Windows_Client"
+  default = "None"
 }
 variable "azure_vm_gallery_resource_group_name" {
   type    = string
