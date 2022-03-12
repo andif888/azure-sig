@@ -45,13 +45,13 @@ do
 done
 wait
 
-# for d in $build_path_packer/!(_*|.*)/
-# do
-#     azure_managed_image_name=$(basename "$d")
-#     echo $azure_managed_image_name
-#
-#     cd $build_path_packer/$azure_managed_image_name && ./build.sh &
-# done
-# wait
+for d in $build_path_packer/!(_*|.*)/
+do
+    azure_managed_image_name=$(basename "$d")
+    echo $azure_managed_image_name
+
+    cd $build_path_packer/$azure_managed_image_name && ./build.sh &
+done
+wait
 
 cd $current_dir
