@@ -64,6 +64,8 @@ resource "azurerm_windows_virtual_machine" "vm" {
     }
   }
 
+  timezone = var.timezone
+
   tags                         = merge({ "resourcename" = format("%s", lower(replace(var.name, "/[[:^alnum:]]/", ""))) }, var.tags, )
 
 }

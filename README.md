@@ -1,6 +1,6 @@
 # azure-sig
 
-This repository builds Windows Master Images and publishes it to **Azure Shared Image Gallery** with a single [build command](./build.sh).\
+This repository builds Windows Master Images and publishes it to **Azure Compute Gallery** with a single [build command](./build.sh).\
 It nicely integrates [Packer](https://www.packer.io/downloads), [Terraform](https://www.terraform.io/downloads.html) and [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html). It is hooked into **Github Actions** as CI/CD pipeline.
 
 An additional trick is: Variables from Terrafrom can be reused in Packer, because since Packer 1.5
@@ -54,7 +54,7 @@ nano shared_vars.hcl
 ```
 ### Step 2: Enter azure credentials in `.env` file
 
-Rename [env.sample](./env.sample) to `.env` and fill in your azure credentials.  
+Rename [sample.env](./sample.env) to `.env` and fill in your azure credentials.  
 Make sure to enter a correct `ARM_ACCESS_KEY`. This is the access key for an existing storage account hosting terraform state files, which you have specified in Step 1.
 
 ### Step 3: Make sure to enter you own SSH Public Key into openssh.ps1
@@ -81,7 +81,7 @@ Run the [build.sh](./build.sh). Make sure you source the `.env` file before.
 [build.sh](./build.sh) runs the [build.sh](./terraform/en-windows-2022-small/build.sh) in **each subfolder** of [./terraform](./terraform/)  which does not start with `.*` and not with `_*` to create the **gallery image definition**.
 
 After that it runs the [build.sh](./packer/en-windows-2022-small/build.sh) in **each subfolder** of [./packer](./packer) directory to build a new **gallery image version**.
-The version information for gallery image versions is used from [VERSION](./VERSION) file.
+The version information for gallery image versions is used from **VERSION-*** files.
 
 ```bash
 source .env
@@ -104,13 +104,24 @@ source .env
 ## Github Actions
 
 This repo is integrated with **Github Actions**.  
-Before pushing your repo changes to Github, make sure to enter your Azure credentials into the `Action secrets` in Github. Name the Action secrets exactly in correspondence to the entries in the `.env` file.
+Before pushing your repo changes to Github, make sure to create an **repository secret** named `envfile` in Github. Copy the complete contents of your`.env` file into this repository secret.   
+Checkout: [How to create envfile as Github secret](./docs/how_to_create_envfile_as_github_secret.md)
 
-There a 3 Github Action workflows in [.github/workflows](./.github/workflows)
+There a 2 Github Action workflows in [.github/workflows](./.github/workflows) to manage the the **Azure Compute Image Gallery** and **Image Definitions**.
 
-- **[sig](./.github/workflows/sig.yml)** builds the share images gallery and gallery image definition
+- **[sig](./.github/workflows/sig.yml)** builds the Azure Compute Image Gallery and Gallery Image Definition
 - **[sig_destroy](./.github/workflows/sig.yml)** destroys everything
-- **[packer-en-windows-2022-small](./.github/workflows/packer-en-windows-2022-small.yml)** builds the gallery image version
+
+The remaining Github Actions named `packer-*` are responsible for building concrete **Gallery Image Versions**.
+
+- [packer-de-windows-10-avd](./.github/workflows/packer-de-windows-10-avd.yml)
+- [packer-de-windows-11-avd](./.github/workflows/packer-de-windows-11-avd.yml)
+- [packer-de-windows-2019-small](./.github/workflows/packer-de-windows-2019-small.yml)
+- [packer-de-windows-2022-small](./.github/workflows/packer-de-windows-2022-small.yml)
+- [packer-en-windows-10-avd](./.github/workflows/packer-en-windows-10-avd.yml)
+- [packer-en-windows-11-avd](./.github/workflows/packer-en-windows-11-avd.yml)
+- [packer-en-windows-2019-small](./.github/workflows/packer-en-windows-2019-small.yml)
+- [packer-en-windows-2022-small](./.github/workflows/packer-en-windows-2022-small.yml)
 
 ### sig
 
@@ -121,10 +132,10 @@ This workflow can also be started manually using `workflow_dispatch`.
 
 This workflow is only started manually using `workflow_dispatch`. You should only run this workflow if you intend to destroy everything.
 
-### packer-en-windows-2022-small
+### packer-*
 
-This workflow runs, when there are changes in any file below **[packer](./packer)** folder.  
-This workflow can also be started manually using `workflow_dispatch`. It automatically increments the `patch` version number in [VERSION](./VERSION) file.
+Those workflows run, when there are changes in any file below the corresponding **[packer](./packer)** folder and ansible file.
+This workflow can also be started manually using `workflow_dispatch`. It automatically increments the `patch` version number in **VERSION-*** file.
 
 ----
 
@@ -291,11 +302,11 @@ Example:
 
 #### Adjust sig workflow
 
-copy **line 122-227** and paste them at the end of the file.
+copy **line 104-191** and paste them at the end of the file.
 
 Adjust the following lines for the new gallery image:
 
-Adjust **line 122-134**, so that the values matche your new gallery image name (foldername)
+Adjust **line 104-116**, so that the values match your new gallery image name (foldername)
 ```yaml
 ##############################
 # Job: windows_11_avd:
@@ -310,25 +321,6 @@ Adjust **line 122-134**, so that the values matche your new gallery image name (
     defaults:
       run:
         working-directory: ${{ env.tf_actions_working_dir }}
-```
-
-#### Adjust sig_destroy workflow
-
-copy **line 16-90** and paste them above **line 16**.
-
-Adjust the following lines for the new gallery image:
-
-Adjust **line 16-24**, so that the values matche your new gallery image name (foldername)
-```yaml
-windows_11_avd:
-  name: windows-11-avd
-  runs-on: ubuntu-latest
-  env:
-    TF_VAR_azure_managed_image_name: windows-11-avd
-    tf_actions_working_dir: 'terraform/windows-11-avd'
-  defaults:
-    run:
-      working-directory: ${{ env.tf_actions_working_dir }}
 ```
 
 ### Push changes to Github

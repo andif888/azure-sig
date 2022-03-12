@@ -1,7 +1,7 @@
 ---
 - hosts: windows
   become: true
-  gather_facts: no
+  gather_facts: yes
 
   # vars:
   #   chocolatey_packages:
@@ -14,12 +14,6 @@
   #   - { name: ansible-role-win-bginfo }
 
   pre_tasks:
-    # If we have installed lots of windows update before running this playbook, then it makes sense to reboot first.
-    # - name: Reboot first
-    #   win_reboot:
-    #     reboot_timeout: 3600
-    #     pre_reboot_delay: 10
-    #     post_reboot_delay: 30
 
       # This task is not necessary but a nice optimization
     - name: Optimize powershell

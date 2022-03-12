@@ -15,3 +15,4 @@ credentials.auto.tfvars
 vault
 playground/
 packer-provisioner-ansible*
+zzz_*

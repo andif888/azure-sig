@@ -43,7 +43,7 @@ variable "azure_vm_size" {
 
 variable "azure_location" {
   type          = string
-  default       = ""
+  default       = env("TF_VAR_azure_location")
   description   = "Azure datacenter in which your VM will build."
 }
 
@@ -106,7 +106,7 @@ variable "azure_managed_image_name" {
 
 variable "azure_resource_group_name" {
   type          = string
-  default       = ""
+  default       = env("TF_VAR_azure_resource_group_name")
   description   = "Specify the managed image resource group name where the result of the Packer build will be saved. The resource group must already exist. If this value is set, the value managed_image_name must also be set."
 }
 
@@ -114,7 +114,7 @@ variable "azure_resource_group_name" {
 
 variable "azure_shared_image_gallery_name" {
   type          = string
-  default       = ""
+  default       = env("TF_VAR_azure_shared_image_gallery_name")
   description   = "Name of the shared image gallery"
 }
 
@@ -181,18 +181,18 @@ variable "ansible_inventory_directory" {
 }
 
 // not used by packer but to get rid off warnigs
-variable "azure_bootstrap_resource_group_name" {
-  type = string
-  default = ""
-}
-variable "azure_bootstrap_storage_account_name" {
-  type = string
-  default = ""
-}
-variable "azure_bootstrap_storage_account_container_name" {
-  type = string
-  default = ""
-}
+// variable "azure_bootstrap_resource_group_name" {
+//   type = string
+//   default = ""
+// }
+// variable "azure_bootstrap_storage_account_name" {
+//   type = string
+//   default = ""
+// }
+// variable "azure_bootstrap_storage_account_container_name" {
+//   type = string
+//   default = ""
+// }
 
 source "azure-arm" "windows" {
   client_id                 = var.azure_client_id

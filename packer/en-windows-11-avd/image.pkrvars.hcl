@@ -14,5 +14,5 @@ azure_shared_image_gallery_destination_storage_account_type = "Standard_LRS"
 azure_vm_size                   = "Standard_D2ds_v4"
 
 # The main ansible playbook which packer executes
-ansible_playbook_file           = "../../ansible/playbook.yml"
+ansible_playbook_file           = "../../ansible/playbook-en-windows-11-avd.yml"
 #

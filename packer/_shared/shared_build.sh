@@ -13,21 +13,6 @@ script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 script_dir_name=$(basename $script_dir)
 proj_root="$(dirname $(dirname $script_dir))"
 
-echo "current_dir:"
-echo $current_dir
-echo "-------"
-echo "script_name:"
-echo $script_name
-echo "-------"
-echo "script_dir:"
-echo $script_dir
-echo "-------"
-echo "script_dir_name:"
-echo $script_dir_name
-echo "-------"
-echo "proj_root:"
-echo $proj_root
-
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -44,6 +29,10 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -w|--whatif)
+    WHATIF="yes"
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -51,6 +40,8 @@ case $key in
 esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
+
+cd $script_dir
 
 shared_vars_file=../../shared_vars.hcl
 azure_managed_image_name=${IMAGE}
@@ -66,7 +57,7 @@ fi
 if [ -z "$azure_managed_image_version" ]
 then
     #display_usage
-    azure_managed_image_version=$(cat ../../VERSION | xargs)
+    azure_managed_image_version=$(cat ../../VERSION-$azure_managed_image_name | xargs)
     #exit 1
 fi
 
@@ -83,10 +74,17 @@ packer validate \
 -var-file $shared_vars_file \
 -var-file ./image.pkrvars.hcl \
 -var="azure_managed_image_name=$azure_managed_image_name" \
--var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" windows.pkr.hcl
+-var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" \
+./windows.pkr.hcl
 
-packer build -force \
--var-file $shared_vars_file \
--var-file ./image.pkrvars.hcl \
--var="azure_managed_image_name=$azure_managed_image_name" \
--var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" windows.pkr.hcl
+if [ "$WHATIF" != "yes" ]
+then
+  packer build -force \
+  -var-file $shared_vars_file \
+  -var-file ./image.pkrvars.hcl \
+  -var="azure_managed_image_name=$azure_managed_image_name" \
+  -var="azure_shared_image_gallery_destination_image_version=$azure_managed_image_version" \
+  ./windows.pkr.hcl
+fi
+
+cd $current_dir

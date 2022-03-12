@@ -124,3 +124,7 @@ variable "hostpool_registration_token" {
     type = string
     default = ""
 }
+variable "timezone" {
+  type    = string
+  default = ""
+}

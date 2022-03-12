@@ -28,11 +28,9 @@ echo "-------"
 
 #### Delete Azure Image Versions #########
 
-azure_gallery_name=$(cat shared_vars.hcl | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-azure_resource_group=$(cat shared_vars.hcl | grep "azure_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+azure_gallery_name=${TF_VAR_azure_shared_image_gallery_name}
+azure_resource_group=${TF_VAR_azure_resource_group_name}
 
-echo "azure_gallery_name: $azure_gallery_name"
-echo "azure_resource_group: $azure_resource_group"
 
 az login --service-principal --username $ARM_CLIENT_ID --p=$ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID --output none
 az account set --subscription $ARM_SUBSCRIPTION_ID

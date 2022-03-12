@@ -40,23 +40,13 @@ jobs:
 
     - name: terraform init
       id: init
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       run: |
-        shared_vars_file=../../shared_vars.hcl
-        azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
         terraform init \
-        -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
-        -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
-        -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
-        -backend-config="key=${azure_gallery_name}.tfstate"
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}.tfstate"
 
     - name: terraform validate
       id: validate
@@ -65,13 +55,9 @@ jobs:
     - name: terraform plan
       id: plan
       if: github.event_name == 'pull_request'
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform plan -var-file ../../shared_vars.hcl -no-color
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
       continue-on-error: true
 
     - name: update pull request
@@ -111,13 +97,635 @@ jobs:
     - name: terraform apply
       id: apply
       if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+##############################
+# Job: de_windows_10_avd:
+##############################
+  de_windows_10_avd:
+    name: de-windows-10-avd
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: de-windows-10-avd
+      tf_actions_working_dir: 'terraform/de-windows-10-avd'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
       env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform apply -var-file ../../shared_vars.hcl -auto-approve
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+##############################
+# Job: de_windows_11_avd:
+##############################
+  de_windows_11_avd:
+    name: de-windows-11-avd
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: de-windows-11-avd
+      tf_actions_working_dir: 'terraform/de-windows-11-avd'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+
+##############################
+# Job: de_windows_2019_small:
+##############################
+  de_windows_2019_small:
+    name: de-windows-2019-small
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: de-windows-2019-small
+      tf_actions_working_dir: 'terraform/de-windows-2019-small'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+##############################
+# Job: de_windows_2022_small:
+##############################
+  de_windows_2022_small:
+    name: de-windows-2022-small
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: de-windows-2022-small
+      tf_actions_working_dir: 'terraform/de-windows-2022-small'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+##############################
+# Job: en_windows_10_avd:
+##############################
+  en_windows_10_avd:
+    name: en-windows-10-avd
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: en-windows-10-avd
+      tf_actions_working_dir: 'terraform/en-windows-10-avd'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+
+##############################
+# Job: en_windows_11_avd:
+##############################
+  en_windows_11_avd:
+    name: en-windows-11-avd
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: en-windows-11-avd
+      tf_actions_working_dir: 'terraform/en-windows-11-avd'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
+##############################
+# Job: en_windows_2019_small:
+##############################
+  en_windows_2019_small:
+    name: en-windows-2019-small
+    needs: terraform_image_gallery
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_azure_managed_image_name: en-windows-2019-small
+      tf_actions_working_dir: 'terraform/en-windows-2019-small'
+    defaults:
+      run:
+        working-directory: ${{ env.tf_actions_working_dir }}
+    steps:
+
+    - name: checkout repo
+      uses: actions/checkout@v2
+
+    - name: terraform setup
+      uses: hashicorp/setup-terraform@v1
+
+    - name: terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+
+    - name: terraform init
+      id: init
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform init \
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+
+    - name: terraform validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: terraform plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
+      continue-on-error: true
+
+    - name: update pull request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: terraform plan status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: terraform apply
+      id: apply
+      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve
+
 
 ##############################
 # Job: en_windows_2022_small:
@@ -147,23 +755,13 @@ jobs:
 
     - name: terraform init
       id: init
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       run: |
-        shared_vars_file=../../shared_vars.hcl
-        azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
         terraform init \
-        -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
-        -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
-        -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
-        -backend-config="key=${azure_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
+        -backend-config="resource_group_name=${TF_VAR_azure_bootstrap_resource_group_name}" \
+        -backend-config="storage_account_name=${TF_VAR_azure_bootstrap_storage_account_name}" \
+        -backend-config="container_name=${TF_VAR_azure_bootstrap_storage_account_container_name}" \
+        -backend-config="key=${TF_VAR_azure_shared_image_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
 
     - name: terraform validate
       id: validate
@@ -172,13 +770,9 @@ jobs:
     - name: terraform plan
       id: plan
       if: github.event_name == 'pull_request'
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform plan -var-file ../../shared_vars.hcl -no-color
+      run: |
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform plan -var-file ../../shared_vars.hcl -no-color
       continue-on-error: true
 
     - name: update pull request
@@ -218,117 +812,6 @@ jobs:
     - name: terraform apply
       id: apply
       if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform apply -var-file ../../shared_vars.hcl -auto-approve
-
-##############################
-# Job: windows_11_avd:
-##############################
-  windows_11_avd:
-    name: windows-11-avd
-    needs: terraform_image_gallery
-    runs-on: ubuntu-latest
-    env:
-      TF_VAR_azure_managed_image_name: windows-11-avd
-      tf_actions_working_dir: 'terraform/windows-11-avd'
-    defaults:
-      run:
-        working-directory: ${{ env.tf_actions_working_dir }}
-    steps:
-
-    - name: checkout repo
-      uses: actions/checkout@v2
-
-    - name: terraform setup
-      uses: hashicorp/setup-terraform@v1
-
-    - name: terraform fmt
-      id: fmt
-      run: terraform fmt -check
-      continue-on-error: true
-
-    - name: terraform init
-      id: init
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       run: |
-        shared_vars_file=../../shared_vars.hcl
-        azure_bootstrap_resource_group_name=$(cat $shared_vars_file | grep "azure_bootstrap_resource_group_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_bootstrap_storage_account_container_name=$(cat $shared_vars_file | grep "azure_bootstrap_storage_account_container_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        azure_gallery_name=$(cat $shared_vars_file | grep "azure_shared_image_gallery_name" | cut -d'=' -f2 | tr -d '"' | xargs)
-        terraform init \
-        -backend-config="resource_group_name=${azure_bootstrap_resource_group_name}" \
-        -backend-config="storage_account_name=${azure_bootstrap_storage_account_name}" \
-        -backend-config="container_name=${azure_bootstrap_storage_account_container_name}" \
-        -backend-config="key=${azure_gallery_name}_${{ env.TF_VAR_azure_managed_image_name }}.tfstate"
-
-    - name: terraform validate
-      id: validate
-      run: terraform validate -no-color
-
-    - name: terraform plan
-      id: plan
-      if: github.event_name == 'pull_request'
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform plan -var-file ../../shared_vars.hcl -no-color
-      continue-on-error: true
-
-    - name: update pull request
-      uses: actions/github-script@0.9.0
-      if: github.event_name == 'pull_request'
-      env:
-        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-
-          <details><summary>Show Plan</summary>
-
-          \`\`\`\n
-          ${process.env.PLAN}
-          \`\`\`
-
-          </details>
-
-          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-          github.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: output
-          })
-
-    - name: terraform plan status
-      if: steps.plan.outcome == 'failure'
-      run: exit 1
-
-    - name: terraform apply
-      id: apply
-      if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
-      env:
-        ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      run: terraform apply -var-file ../../shared_vars.hcl -auto-approve
+        echo -n ${{ secrets.envfile }} > .env && . ./.env
+        terraform apply -var-file ../../shared_vars.hcl -auto-approve

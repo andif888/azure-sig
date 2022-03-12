@@ -3,25 +3,15 @@
   become: true
   gather_facts: yes
 
-  vars:
-    # chocolatey_packages:
-    #   - 7zip.install
-    #   - firefox
-    #   - fslogix
-    language_experience_pack_download_dir: 'D:\temp'
-    language_experience_packs: ["de-de"]
-    office365_configuration_xml: files/office/configuration.xml
-    teams_is_wvd_environment: true
-    teams_per_machine_install: true
-    teams_is_32bit: true
+  # vars:
+  #   chocolatey_packages:
+  #     - 7zip.install
+  #     - firefox
+  #     - fslogix
 
-  roles:
-    # Adding some ansible-role just for fun
-    - { name: ansible-role-win10-languagepack }
-    - { name: ansible-role-win-fslogix }
-    - { name: ansible-role-win-office365 }
-    - { name: ansible-role-win-teams }
-    - { name: ansible-role-win-onedrive }
+  # roles:
+  #   # Adding some ansible-role just for fun
+  #   - { name: ansible-role-win-bginfo }
 
   pre_tasks:
 

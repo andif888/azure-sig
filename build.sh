@@ -30,22 +30,28 @@ echo "current_dir:"
 echo $current_dir
 echo "-------"
 
-azure_managed_image_version=$(cat ./VERSION | xargs)
+# azure_managed_image_version=$(cat ./VERSION | xargs)
 
 
 echo "creating image gallery"
-cd $build_path_terraform/_image_gallery
-./build.sh
+cd $build_path_terraform/_image_gallery && ./build.sh
 
 for d in $build_path_terraform/!(_*|.*)/
 do
     azure_managed_image_name=$(basename "$d")
     echo $azure_managed_image_name
 
-    cd $build_path_terraform/$azure_managed_image_name
-    ./build.sh -i $azure_managed_image_name
-
-    cd $build_path_packer/$azure_managed_image_name
-    ./build.sh -i $azure_managed_image_name -v $azure_managed_image_version
+    cd $build_path_terraform/$azure_managed_image_name && ./build.sh &
 done
+wait
+
+# for d in $build_path_packer/!(_*|.*)/
+# do
+#     azure_managed_image_name=$(basename "$d")
+#     echo $azure_managed_image_name
+#
+#     cd $build_path_packer/$azure_managed_image_name && ./build.sh &
+# done
+# wait
+
 cd $current_dir

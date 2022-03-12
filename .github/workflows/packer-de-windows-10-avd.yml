@@ -1,0 +1,71 @@
+# This is a basic workflow to help you get started with Actions
+
+name: packer-de-windows-10-avd
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    # run on main branch
+    branches:
+      - master
+    paths:
+      - 'packer/de-windows-10-avd/**'
+      - 'ansible/playbook-de-windows-10-avd.yml'
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build_image:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # https://dev.to/mihinduranasinghe/using-docker-containers-in-jobs-github-actions-3eof
+    container:
+      image: andif888/docker-pataz:v0.9.1
+
+    env:
+      # ${{ env.PKR_VAR_azure_managed_image_name }}
+      PKR_VAR_azure_managed_image_name: de-windows-10-avd
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: '0'
+
+      - name: show versions in container
+        run: |
+          ansible --version
+          packer version
+
+      - name: packer validate
+        id: validate
+        run: |
+          echo -n ${{ secrets.envfile }} > .env && . ./.env
+          cd packer/${{ env.PKR_VAR_azure_managed_image_name }} && ./build.sh --whatif
+
+      - name:  'automated version bump'
+        id: versionbump
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        uses:  remorses/bump-version@js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version_file: ./VERSION-${{ env.PKR_VAR_azure_managed_image_name }}
+          prefix: ${{ env.PKR_VAR_azure_managed_image_name }}
+
+      - name: echo new version
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        run: echo ${{ steps.versionbump.outputs.version }}
+
+      - name: packer build
+        id: build
+        if: ${{ (github.ref == 'refs/heads/master') && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch')) }}
+        run: |
+          echo -n ${{ secrets.envfile }} > .env && . ./.env
+          cd packer/${{ env.PKR_VAR_azure_managed_image_name }} && ./build.sh
