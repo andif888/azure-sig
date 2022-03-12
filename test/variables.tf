@@ -91,15 +91,6 @@ variable "azure_vm_license_type" {
   type    = string
   default = "None"
 }
-variable "azure_vm_gallery_resource_group_name" {
-  type    = string
-  default = ""
-}
-
-variable "azure_vm_gallery_name" {
-  type    = string
-  default = ""
-}
 variable "azure_vm_shared_image_name" {
   type    = string
   default = ""
@@ -108,9 +99,6 @@ variable "azure_vm_shared_image_version" {
   type    = string
   default = "latest"
 }
-
-
-
 variable "azure_vm_resource_group_name" {
   type    = string
   default = ""

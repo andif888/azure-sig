@@ -6,8 +6,8 @@ module "azure_virtual_desktop_vm" {
   instance_count                      = var.azure_vm_instance_count
   size                                = var.azure_vm_size
   license_type                        = var.azure_vm_license_type
-  gallery_resource_group_name         = var.azure_vm_gallery_resource_group_name
-  gallery_name                        = var.azure_vm_gallery_name
+  gallery_resource_group_name         = var.azure_resource_group_name
+  gallery_name                        = var.azure_shared_image_gallery_name
   shared_image_name                   = var.azure_vm_shared_image_name
   shared_image_version                = var.azure_vm_shared_image_version
   resource_group_name                 = var.azure_vm_resource_group_name
@@ -26,8 +26,8 @@ module "azure_virtual_desktop_vm" {
   hostpool_registration_token = var.azure_vm_hostpool_registration_token
   tags = {
     "environment"                 = "test",
-    "gallery_resource_group_name" = var.azure_vm_gallery_resource_group_name,
-    "gallery_name"                = var.azure_vm_gallery_name,
+    "gallery_resource_group_name" = var.azure_resource_group_name,
+    "gallery_name"                = var.azure_shared_image_gallery_name,
     "shared_image_name"           = var.azure_vm_shared_image_name,
     "shared_image_version"        = var.azure_vm_shared_image_version
   }
