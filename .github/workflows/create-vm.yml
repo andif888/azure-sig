@@ -76,7 +76,7 @@ jobs:
     name: create_vm
     runs-on: ubuntu-latest
     env:
-      tf_actions_working_dir: 'test/vms'
+      tf_actions_working_dir: 'test'
 
     defaults:
       run:
