@@ -128,6 +128,11 @@ variable "azure_shared_image_gallery_destination_storage_account_type" {
   default       = "Standard_LRS"
 }
 
+variable "azure_shared_image_gallery_replication_regions" {
+  type          = list(string)
+  default       = [env("TF_VAR_azure_location")]
+}
+
 variable "azure_os_type" {
   type          = string
   default       = "Windows"
@@ -228,7 +233,7 @@ source "azure-arm" "windows" {
     gallery_name            = var.azure_shared_image_gallery_name
     image_name              = var.azure_managed_image_name
     image_version           = var.azure_shared_image_gallery_destination_image_version
-    replication_regions     = [var.azure_location]
+    replication_regions     = var.azure_shared_image_gallery_replication_regions
     storage_account_type    = var.azure_shared_image_gallery_destination_storage_account_type
   }
 
