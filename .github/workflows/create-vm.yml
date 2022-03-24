@@ -69,7 +69,7 @@ on:
         options:
           - None
           - Windows_Server
-          - windows_Client
+          - Windows_Client
         default: 'None'
 
 
