@@ -17,6 +17,9 @@ on:
           - Standard_D2ds_v5
           - Standard_D4ds_v5
           - Standard_D8ds_v5
+          - Standard_D2ds_v4
+          - Standard_D4ds_v4
+          - Standard_D8ds_v4
           - Standard_B2s
           - Standard_B2ms
           - Standard_B4ms

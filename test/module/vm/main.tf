@@ -41,7 +41,7 @@ resource "azurerm_network_interface" "vm" {
 
 resource "azurerm_windows_virtual_machine" "vm" {
   count               = var.instance_count
-  name                = "${var.name}${count.index}-vm"
+  name                = "${var.name}${count.index}"
   resource_group_name = data.azurerm_resource_group.vm.name
   location            = data.azurerm_resource_group.vm.location
   size                = var.size
