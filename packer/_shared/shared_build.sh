@@ -50,15 +50,11 @@ azure_managed_image_version=${VERSION}
 
 if [ -z "$azure_managed_image_name" ]
 then
-    #display_usage
     azure_managed_image_name=$script_dir_name
-    #exit 1
 fi
 if [ -z "$azure_managed_image_version" ]
 then
-    #display_usage
     azure_managed_image_version=$(cat ../../VERSION-$azure_managed_image_name | xargs)
-    #exit 1
 fi
 
 #[ ! -f "$azure_managed_image_name.pkrvars.hcl" ] && echo "Error: File $azure_managed_image_name.pkrvars.hcl DOES NOT EXIST" && exit 2

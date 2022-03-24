@@ -64,9 +64,7 @@ azure_managed_image_name=${IMAGE}
 
 if [ -z "$azure_managed_image_name" ]
 then
-    #display_usage
     azure_managed_image_name=$script_dir_name
-    #exit 1
 fi
 
 azure_gallery_name=${GALLERY}
