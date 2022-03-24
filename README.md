@@ -42,22 +42,18 @@ az ad sp create-for-rbac \
 > az_client_credentials.json
 ```
 
-Make sure to have a ready to use **storage account** in Azure which is used to store terraform state files. You can manually create it or use [https://github.com/andif888/azure-bootstrap](https://github.com/andif888/azure-bootstrap). You have to specify the storage account in Step 1 into [shared_vars.hcl](./shared_vars.hcl).
+Make sure to have a ready to use **storage account** in Azure which is used to store terraform state files. You can manually create it or use [https://github.com/andif888/azure-bootstrap](https://github.com/andif888/azure-bootstrap). You have to specify the storage account in Step 1 into your `.env` file.
 
 ### Step 1: Adjust variables
 
-Adjust variables in file [shared_vars.hcl](./shared_vars.hcl) for your Azure environment. Documentation on each variable is inside the sample file.
+Adjust variables in `.env` file for your Azure environment. There is a [sample.env](./sample.env). Copy it and rename it to `.env`. Documentation on each variable is inside the sample file.
 
 ```bash
 # Edit the file
-nano shared_vars.hcl
+cp sample.env .env
 ```
-### Step 2: Enter azure credentials in `.env` file
 
-Rename [sample.env](./sample.env) to `.env` and fill in your azure credentials.  
-Make sure to enter a correct `ARM_ACCESS_KEY`. This is the access key for an existing storage account hosting terraform state files, which you have specified in Step 1.
-
-### Step 3: Make sure to enter you own SSH Public Key into openssh.ps1
+### Step 2: Make sure to enter you own SSH Public Key into openssh.ps1
 
 Edit the file [./packer/_shared/setup/openssh.ps1](./packer/_shared/setup/openssh.ps1) and replace the existing SSH Public Key with your own.
 Otherwise I have access to your machines :-)\
@@ -72,7 +68,7 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRYCV99Ge9LI5Y61t95pkcG7trsDyg/eAHLfTGDMHO
 
 If you don't need SSH Public Key Authentication, you can remove the whole part between Line 24 and 40.
 
-### Step 4: Build
+### Step 3: Build
 
 Run the [build.sh](./build.sh). Make sure you source the `.env` file before.
 
