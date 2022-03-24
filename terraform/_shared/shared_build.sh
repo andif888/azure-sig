@@ -44,6 +44,10 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -w|--whatif)
+    WHATIF="yes"
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -85,6 +89,10 @@ terraform init \
 -backend-config="key=${azure_gallery_name}_${azure_managed_image_name}.tfstate"
 terraform validate
 terraform plan -var-file $shared_vars_file -var="azure_managed_image_name=$azure_managed_image_name" -input=false -out=planfile
-terraform apply -auto-approve planfile
+
+if [ "$WHATIF" != "yes" ]
+then
+  terraform apply -auto-approve planfile
+fi
 
 cd $current_dir
