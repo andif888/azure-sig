@@ -11,7 +11,7 @@ jobs:
     name: destroy
     runs-on: ubuntu-latest
     container:
-      image: andif888/docker-pataz:v0.9.1
+      image: andif888/docker-pataz:v0.9.3
 
     steps:
 

@@ -26,7 +26,7 @@ jobs:
 
     # https://dev.to/mihinduranasinghe/using-docker-containers-in-jobs-github-actions-3eof
     container:
-      image: andif888/docker-pataz:v0.9.1
+      image: andif888/docker-pataz:v0.9.3
 
     env:
       # ${{ env.PKR_VAR_azure_managed_image_name }}
