@@ -266,6 +266,28 @@ build {
     script            = "../_shared/setup/snmp.ps1"
   }
 
+  provisioner "windows-update" {
+    search_criteria = "IsInstalled=0"
+    filters = [
+      "exclude:$_.Title -like '*Preview*'",
+      "include:$true",
+    ]
+    update_limit = 25
+  }
+
+  provisioner "windows-restart" {
+    pause_before = "10s"
+    max_retries = 3
+    restart_timeout = "45m"
+  }
+
+  provisioner "powershell" {
+   inline = [
+        "  while ((Get-Service RdAgent).Status -ne 'Running') { Start-Sleep -s 5 }",
+        "  while ((Get-Service WindowsAzureGuestAgent).Status -ne 'Running') { Start-Sleep -s 5 }"
+   ]
+  }  
+
   provisioner "ansible" {
     playbook_file           = var.ansible_playbook_file
     user                    = build.User
